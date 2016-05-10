@@ -25,7 +25,7 @@ FDWrapper::~FDWrapper() {
     }
 }
 
-void mkdirs(std::string dir, int start_offset = 0) {
+void mkdirs(std::string dir, int start_offset = 1) {
     for (unsigned i=start_offset; i<dir.size(); i++) {
         if (dir[i] == '/') {
             dir[i] = 0;
