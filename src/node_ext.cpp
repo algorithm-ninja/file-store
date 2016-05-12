@@ -58,7 +58,7 @@ namespace file_store_internal {
         work->error_callback.Reset();
         delete work;
     }
-  
+
     void DoReadFileAsync(const FunctionCallbackInfo<Value>& args) {
         Isolate* isolate = args.GetIsolate();
         ReadFileWork * work = new ReadFileWork();
@@ -71,7 +71,7 @@ namespace file_store_internal {
 
         uv_queue_work(uv_default_loop(), &work->request, ReadFileAsync, ReadFileAsyncComplete);
 
-        args.GetReturnValue().Set(Undefined(isolate));  
+        args.GetReturnValue().Set(Undefined(isolate));
     }
 
     struct WriteFileWork: public FileManagerWork {
@@ -105,7 +105,7 @@ namespace file_store_internal {
         work->error_callback.Reset();
         delete work;
     }
-  
+
     void DoWriteFileAsync(const FunctionCallbackInfo<Value>& args) {
         Isolate* isolate = args.GetIsolate();
         WriteFileWork * work = new WriteFileWork();
@@ -120,7 +120,7 @@ namespace file_store_internal {
 
         uv_queue_work(uv_default_loop(), &work->request, WriteFileAsync, WriteFileAsyncComplete);
 
-        args.GetReturnValue().Set(Undefined(isolate));  
+        args.GetReturnValue().Set(Undefined(isolate));
     }
 
     struct CopyFileToWork: public FileManagerWork {
@@ -154,7 +154,7 @@ namespace file_store_internal {
         work->error_callback.Reset();
         delete work;
     }
-  
+
     void DoCopyFileToAsync(const FunctionCallbackInfo<Value>& args) {
         Isolate* isolate = args.GetIsolate();
         CopyFileToWork * work = new CopyFileToWork();
@@ -168,7 +168,7 @@ namespace file_store_internal {
 
         uv_queue_work(uv_default_loop(), &work->request, CopyFileToAsync, CopyFileToAsyncComplete);
 
-        args.GetReturnValue().Set(Undefined(isolate));  
+        args.GetReturnValue().Set(Undefined(isolate));
     }
 
     struct CopyFileFromWork: public FileManagerWork {
@@ -202,7 +202,7 @@ namespace file_store_internal {
         work->error_callback.Reset();
         delete work;
     }
-  
+
     void DoCopyFileFromAsync(const FunctionCallbackInfo<Value>& args) {
         Isolate* isolate = args.GetIsolate();
         CopyFileFromWork * work = new CopyFileFromWork();
@@ -216,9 +216,9 @@ namespace file_store_internal {
 
         uv_queue_work(uv_default_loop(), &work->request, CopyFileFromAsync, CopyFileFromAsyncComplete);
 
-        args.GetReturnValue().Set(Undefined(isolate));  
+        args.GetReturnValue().Set(Undefined(isolate));
     }
-    
+
     struct LinkWork: public FileManagerWork {
         std::string file_path;
         std::string other_path;
@@ -250,7 +250,7 @@ namespace file_store_internal {
         work->error_callback.Reset();
         delete work;
     }
-  
+
     void DoLinkAsync(const FunctionCallbackInfo<Value>& args) {
         Isolate* isolate = args.GetIsolate();
         LinkWork * work = new LinkWork();
@@ -264,7 +264,7 @@ namespace file_store_internal {
 
         uv_queue_work(uv_default_loop(), &work->request, LinkAsync, LinkAsyncComplete);
 
-        args.GetReturnValue().Set(Undefined(isolate));  
+        args.GetReturnValue().Set(Undefined(isolate));
     }
 
     struct DeleteFileWork: public FileManagerWork {
@@ -297,7 +297,7 @@ namespace file_store_internal {
         work->error_callback.Reset();
         delete work;
     }
-  
+
     void DoDeleteFileAsync(const FunctionCallbackInfo<Value>& args) {
         Isolate* isolate = args.GetIsolate();
         DeleteFileWork * work = new DeleteFileWork();
@@ -310,7 +310,7 @@ namespace file_store_internal {
 
         uv_queue_work(uv_default_loop(), &work->request, DeleteFileAsync, DeleteFileAsyncComplete);
 
-        args.GetReturnValue().Set(Undefined(isolate));  
+        args.GetReturnValue().Set(Undefined(isolate));
     }
 
     struct ExistsWork: public FileManagerWork {
@@ -345,7 +345,7 @@ namespace file_store_internal {
         work->error_callback.Reset();
         delete work;
     }
-  
+
     void DoExistsAsync(const FunctionCallbackInfo<Value>& args) {
         Isolate* isolate = args.GetIsolate();
         ExistsWork * work = new ExistsWork();
@@ -358,7 +358,7 @@ namespace file_store_internal {
 
         uv_queue_work(uv_default_loop(), &work->request, ExistsAsync, ExistsAsyncComplete);
 
-        args.GetReturnValue().Set(Undefined(isolate));  
+        args.GetReturnValue().Set(Undefined(isolate));
     }
 
     void init(Local<Object> exports) {
@@ -371,5 +371,4 @@ namespace file_store_internal {
         NODE_SET_METHOD(exports, "file_exists", DoExistsAsync);
     }
     NODE_MODULE(file_store_internal, init)
-}  
-
+}

@@ -1,7 +1,7 @@
 {
   "targets": [
     {
-      "target_name": "file-store-internal"
+      "target_name": "file_store_internal"
     }
   ],
   "variables":

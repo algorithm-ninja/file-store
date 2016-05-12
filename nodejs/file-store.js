@@ -1,93 +1,93 @@
 'use strict';
 
-const fileStoreInternal = require('../build/Release/file-store-internal');
+var fs_internal = require('../build/Release/file_store_internal');
 
-class FileHandle {
-  constructor(fileRoot, filePath) {
-    this.fileRoot = fileRoot;
-    this.filePath = filePath;
-  }
+function FileHandle(fileRoot, filePath) {
+  var self = this;
+
+  self.fileRoot = fileRoot;
+  self.filePath = filePath;
 
   // callback(error, exists)
-  exists(callback) {
+  this.exists = function(callback) {
     /* jshint camelcase: false */
-    fileStoreInternal.file_exists(
-        this.fileRoot,
-        this.filePath,
-        found => callback(0, found),
-        error => callback(error));
-    return this;
-  }
+    fs_internal.file_exists(
+        self.fileRoot,
+        self.filePath,
+        function(found) { callback(null, found); },
+        function(error) { callback(error); });
+    return self;
+  };
 
   // callback(error, data)
-  read(callback) {
+  this.read = function(callback) {
     /* jshint camelcase: false */
-    fileStoreInternal.read_file(
-        this.fileRoot,
-        this.filePath,
-        data => callback(0, data),
-        error => callback(error));
-    return this;
-  }
+    fs_internal.read_file(
+        self.fileRoot,
+        self.filePath,
+        function(data) { callback(null, data); },
+        function(error) { callback(error); });
+    return self;
+  };
 
   // callback(error)
-  write(data, callback) {
+  this.write = function(data, callback) {
     /* jshint camelcase: false */
-    fileStoreInternal.write_file(
-        this.fileRoot,
-        this.filePath,
+    fs_internal.write_file(
+        self.fileRoot,
+        self.filePath,
         data,
-        () => callback(0),
-        error => callback(error));
-    return this;
-  }
+        function() { callback(null); },
+        function(error) { callback(error); });
+    return self;
+  };
 
   // callback(error)
-  createLink(destination, callback) {
+  this.createLink = function(destination, callback) {
     /* jshint camelcase: false */
-    fileStoreInternal.link_file(
-        this.fileRoot,
-        this.filePath,
+    fs_internal.link_file(
+        self.fileRoot,
+        self.filePath,
         destination,
-        () => callback(0),
-        error => callback(error));
-    return this;
-  }
+        function() { callback(null); },
+        function(error) { callback(error); });
+    return self;
+  };
 
   // callback(error)
-  remove(callback) {
+  this.remove = function(callback) {
     /* jshint camelcase: false */
-    fileStoreInternal.delete_file(
-        this.fileRoot,
-        this.filePath,
-        () => callback(0),
-        error => callback(error));
-    return this;
-  }
+    fs_internal.delete_file(
+        self.fileRoot,
+        self.filePath,
+        function() { callback(null); },
+        function(error) { callback(error); });
+    return self;
+  };
 
   // callback(error)
-  copyTo(destPath, callback) {
+  this.copyTo = function(destPath, callback) {
     /* jshint camelcase: false */
-    fileStoreInternal.copy_file_from_storage(
-        this.fileRoot,
-        this.filePath,
+    fs_internal.copy_file_from_storage(
+        self.fileRoot,
+        self.filePath,
         destPath,
-        () => callback(0),
-        error => callback(error));
-    return this;
-  }
+        function() { callback(null); },
+        function(error) { callback(error); });
+    return self;
+  };
 
   // callback(error)
-  copyFrom(origPath, callback) {
+  this.copyFrom = function(origPath, callback) {
     /* jshint camelcase: false */
-    fileStoreInternal.copy_file_to_storage(
-        this.fileRoot,
-        this.filePath,
+    fs_internal.copy_file_to_storage(
+        self.fileRoot,
+        self.filePath,
         origPath,
-        () => callback(0),
-        error => callback(error));
-    return this;
-  }
+        function() { callback(null); },
+        function(error) { callback(error); });
+    return self;
+  };
 }
 
 module.exports = FileHandle;
