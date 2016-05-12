@@ -6,7 +6,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#ifndef __unix__
+#if ! (defined(__unix__) || defined(__APPLE__))
 #error "This won't work on a non-unix OS!"
 #endif
 

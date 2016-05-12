@@ -4,7 +4,8 @@
       "target_name": "file_store_internal",
       "sources": [ "src/file_manager.cpp", "src/node_ext.cpp" ],
       "libraries": [ "-lssl" ],
-      "cflags": [ "-O2", "-Wall", "-std=c++11", "-I<!(pwd)/headers", "-fexceptions" ],
+      "cflags": [ "-O2", "-Wall", "-std=c++11", "-fexceptions" ],
+      "include_dirs": ["<!(node -e \"require('nan')\")", "<!(pwd)/headers"],
       "cflags!": ["-fno-exceptions"],
       "cflags_cc!": ["-fno-exceptions"],
       "xcode_settings": {

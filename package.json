@@ -1,6 +1,6 @@
 {
   "name": "shuriken-fs",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "A library to facilitate safe access to files on a shared file system",
   "main": "nodejs/file-store.js",
   "scripts": {
@@ -16,5 +16,8 @@
   "bugs": {
     "url": "https://github.com/algorithm-ninja/file-store/issues"
   },
-  "homepage": "https://github.com/algorithm-ninja/file-store#readme"
+  "homepage": "https://github.com/algorithm-ninja/file-store#readme",
+  "dependencies": {
+    "nan": "^2.3.3"
+  }
 }

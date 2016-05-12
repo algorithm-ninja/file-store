@@ -2,6 +2,18 @@
 
 var fs_internal = require('../build/Release/file_store_internal');
 
+function getReturnCallback(callback) {
+  return function(err, ret) {
+    callback(err ? new Error(err) : null, ret);
+  };
+}
+
+function getVoidCallback(callback) {
+  return function(err) {
+    callback(err ? new Error(err) : null);
+  };
+}
+
 function FileHandle(fileRoot, filePath) {
   var self = this;
 
@@ -14,8 +26,7 @@ function FileHandle(fileRoot, filePath) {
     fs_internal.file_exists(
         self.fileRoot,
         self.filePath,
-        function(found) { callback(null, found); },
-        function(error) { callback(error); });
+        getReturnCallback(callback));
     return self;
   };
 
@@ -25,8 +36,7 @@ function FileHandle(fileRoot, filePath) {
     fs_internal.read_file(
         self.fileRoot,
         self.filePath,
-        function(data) { callback(null, data); },
-        function(error) { callback(error); });
+        getReturnCallback(callback));
     return self;
   };
 
@@ -37,8 +47,7 @@ function FileHandle(fileRoot, filePath) {
         self.fileRoot,
         self.filePath,
         data,
-        function() { callback(null); },
-        function(error) { callback(error); });
+        getVoidCallback(callback));
     return self;
   };
 
@@ -49,8 +58,7 @@ function FileHandle(fileRoot, filePath) {
         self.fileRoot,
         self.filePath,
         destination,
-        function() { callback(null); },
-        function(error) { callback(error); });
+        getVoidCallback(callback));
     return self;
   };
 
@@ -60,8 +68,7 @@ function FileHandle(fileRoot, filePath) {
     fs_internal.delete_file(
         self.fileRoot,
         self.filePath,
-        function() { callback(null); },
-        function(error) { callback(error); });
+        getVoidCallback(callback));
     return self;
   };
 
@@ -72,8 +79,7 @@ function FileHandle(fileRoot, filePath) {
         self.fileRoot,
         self.filePath,
         destPath,
-        function() { callback(null); },
-        function(error) { callback(error); });
+        getVoidCallback(callback));
     return self;
   };
 
@@ -84,8 +90,7 @@ function FileHandle(fileRoot, filePath) {
         self.fileRoot,
         self.filePath,
         origPath,
-        function() { callback(null); },
-        function(error) { callback(error); });
+        getVoidCallback(callback));
     return self;
   };
 }

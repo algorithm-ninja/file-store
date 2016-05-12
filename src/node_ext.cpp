@@ -1,374 +1,277 @@
-#include <node.h>
-#include <uv.h>
+#include <nan.h>
 #include <iostream>
 #include <unistd.h>
 #include "file_manager.hpp"
+// TODO: we could probably templatize this.
 
-using namespace std;
-
-namespace file_store_internal {
-    using v8::Function;
-    using v8::FunctionCallbackInfo;
-    using v8::Isolate;
-    using v8::Local;
-    using v8::Object;
-    using v8::String;
-    using v8::Integer;
-    using v8::Boolean;
-    using v8::Value;
-    using v8::Persistent;
-    using v8::InvocationCallback;
-
-    struct FileManagerWork {
-        uv_work_t  request;
-        Persistent<InvocationCallback> success_callback;
-        Persistent<InvocationCallback> error_callback;
-        std::string file_root;
-    };
-
-    struct ReadFileWork: public FileManagerWork {
-        std::vector<unsigned char> result;
-        std::string file_path;
-        int error;
-    };
-
-    static void ReadFileAsync(uv_work_t* req) {
-        ReadFileWork* work = static_cast<ReadFileWork*>(req->data);
+// std::vector<unsigned char> read_file(const std::string& file_root, const std::string& path);
+class ReadFileWorker: public Nan::AsyncWorker {
+    std::vector<unsigned char> data;
+    std::string file_root;
+    std::string path;
+    int error;
+public:
+    ReadFileWorker(Nan::Callback* callback, const std::string& file_root, const std::string& path)
+        : AsyncWorker(callback), file_root(file_root), path(path), error(0) {}
+    void Execute() {
         try {
-            work->error = 0;
-            work->result = read_file(work->file_root, work->file_path);
+            data = read_file(file_root, path);
         } catch (OSError& e) {
-            work->error = e.get_err();
+            error = e.get_err();
         }
     }
-
-    static void ReadFileAsyncComplete(uv_work_t *req, int status) {
-        Isolate* isolate = Isolate::GetCurrent();
-        v8::HandleScope handleScope(isolate);
-        ReadFileWork *work = static_cast<ReadFileWork*>(req->data);
-
-        if (work->error) {
-            Local<Value> argv[] = {Integer::New(isolate, work->error)};
-            Local<Function>::New(isolate, work->error_callback)->Call(isolate->GetCurrentContext()->Global(), sizeof(argv)/sizeof(*argv), argv);
+    void HandleOKCallback () {
+        Nan::HandleScope scope;
+        v8::Local<v8::Value> error_code = Nan::New<v8::Integer>(error);
+        if (error) {
+            v8::Local<v8::Value> argv[] = {error_code};
+            callback->Call(1, argv);
         } else {
-            Local<Value> argv[] = {String::NewFromUtf8(isolate, (char*) &work->result[0])};
-            Local<Function>::New(isolate, work->success_callback)->Call(isolate->GetCurrentContext()->Global(), sizeof(argv)/sizeof(*argv), argv);
-        }
-        work->success_callback.Reset();
-        work->error_callback.Reset();
-        delete work;
+            v8::Local<v8::Value> return_value = Nan::New<v8::String>(
+                (char*)data.data(),
+                data.size()
+            ).ToLocalChecked();
+            v8::Local<v8::Value> argv[] = {error_code, return_value};
+            callback->Call(2, argv);
+       }
     }
+};
 
-    void DoReadFileAsync(const FunctionCallbackInfo<Value>& args) {
-        Isolate* isolate = args.GetIsolate();
-        ReadFileWork * work = new ReadFileWork();
-        work->request.data = work;
-
-        work->file_root = std::string(*v8::String::Utf8Value(args[0]->ToString()));
-        work->file_path = std::string(*v8::String::Utf8Value(args[1]->ToString()));
-        work->success_callback.Reset(isolate, Local<Function>::Cast(args[2]));
-        work->error_callback.Reset(isolate, Local<Function>::Cast(args[3]));
-
-        uv_queue_work(uv_default_loop(), &work->request, ReadFileAsync, ReadFileAsyncComplete);
-
-        args.GetReturnValue().Set(Undefined(isolate));
-    }
-
-    struct WriteFileWork: public FileManagerWork {
-        std::vector<unsigned char> data;
-        std::string file_path;
-        int error;
-    };
-
-    static void WriteFileAsync(uv_work_t* req) {
-        WriteFileWork* work = static_cast<WriteFileWork*>(req->data);
-        try {
-            work->error = 0;
-            write_file(work->file_root, work->file_path, work->data);
-        } catch (OSError& e) {
-            work->error = e.get_err();
-        }
-    }
-
-    static void WriteFileAsyncComplete(uv_work_t *req, int status) {
-        Isolate* isolate = Isolate::GetCurrent();
-        v8::HandleScope handleScope(isolate);
-        WriteFileWork *work = static_cast<WriteFileWork*>(req->data);
-
-        if (work->error) {
-            Local<Value> argv[] = {Integer::New(isolate, work->error)};
-            Local<Function>::New(isolate, work->error_callback)->Call(isolate->GetCurrentContext()->Global(), sizeof(argv)/sizeof(*argv), argv);
-        } else {
-            Local<Function>::New(isolate, work->success_callback)->Call(isolate->GetCurrentContext()->Global(), 0, NULL);
-        }
-        work->success_callback.Reset();
-        work->error_callback.Reset();
-        delete work;
-    }
-
-    void DoWriteFileAsync(const FunctionCallbackInfo<Value>& args) {
-        Isolate* isolate = args.GetIsolate();
-        WriteFileWork * work = new WriteFileWork();
-        work->request.data = work;
-
-        work->file_root = std::string(*v8::String::Utf8Value(args[0]->ToString()));
-        work->file_path = std::string(*v8::String::Utf8Value(args[1]->ToString()));
-        v8::String::Utf8Value tmp(args[1]->ToString());
-        work->data.insert(work->data.end(), *tmp, (*tmp)+tmp.length());
-        work->success_callback.Reset(isolate, Local<Function>::Cast(args[3]));
-        work->error_callback.Reset(isolate, Local<Function>::Cast(args[4]));
-
-        uv_queue_work(uv_default_loop(), &work->request, WriteFileAsync, WriteFileAsyncComplete);
-
-        args.GetReturnValue().Set(Undefined(isolate));
-    }
-
-    struct CopyFileToWork: public FileManagerWork {
-        std::string ext_path;
-        std::string file_path;
-        int error;
-    };
-
-    static void CopyFileToAsync(uv_work_t* req) {
-        CopyFileToWork* work = static_cast<CopyFileToWork*>(req->data);
-        try {
-            work->error = 0;
-            copy_file_to_storage(work->file_root, work->file_path, work->ext_path);
-        } catch (OSError& e) {
-            work->error = e.get_err();
-        }
-    }
-
-    static void CopyFileToAsyncComplete(uv_work_t *req, int status) {
-        Isolate* isolate = Isolate::GetCurrent();
-        v8::HandleScope handleScope(isolate);
-        CopyFileToWork *work = static_cast<CopyFileToWork*>(req->data);
-
-        if (work->error) {
-            Local<Value> argv[] = {Integer::New(isolate, work->error)};
-            Local<Function>::New(isolate, work->error_callback)->Call(isolate->GetCurrentContext()->Global(), sizeof(argv)/sizeof(*argv), argv);
-        } else {
-            Local<Function>::New(isolate, work->success_callback)->Call(isolate->GetCurrentContext()->Global(), 0, NULL);
-        }
-        work->success_callback.Reset();
-        work->error_callback.Reset();
-        delete work;
-    }
-
-    void DoCopyFileToAsync(const FunctionCallbackInfo<Value>& args) {
-        Isolate* isolate = args.GetIsolate();
-        CopyFileToWork * work = new CopyFileToWork();
-        work->request.data = work;
-
-        work->file_root = std::string(*v8::String::Utf8Value(args[0]->ToString()));
-        work->file_path = std::string(*v8::String::Utf8Value(args[1]->ToString()));
-        work->ext_path = std::string(*v8::String::Utf8Value(args[2]->ToString()));
-        work->success_callback.Reset(isolate, Local<Function>::Cast(args[3]));
-        work->error_callback.Reset(isolate, Local<Function>::Cast(args[4]));
-
-        uv_queue_work(uv_default_loop(), &work->request, CopyFileToAsync, CopyFileToAsyncComplete);
-
-        args.GetReturnValue().Set(Undefined(isolate));
-    }
-
-    struct CopyFileFromWork: public FileManagerWork {
-        std::string ext_path;
-        std::string file_path;
-        int error;
-    };
-
-    static void CopyFileFromAsync(uv_work_t* req) {
-        CopyFileFromWork* work = static_cast<CopyFileFromWork*>(req->data);
-        try {
-            work->error = 0;
-            copy_file_from_storage(work->file_root, work->file_path, work->ext_path);
-        } catch (OSError& e) {
-            work->error = e.get_err();
-        }
-    }
-
-    static void CopyFileFromAsyncComplete(uv_work_t *req, int status) {
-        Isolate* isolate = Isolate::GetCurrent();
-        v8::HandleScope handleScope(isolate);
-        CopyFileFromWork *work = static_cast<CopyFileFromWork*>(req->data);
-
-        if (work->error) {
-            Local<Value> argv[] = {Integer::New(isolate, work->error)};
-            Local<Function>::New(isolate, work->error_callback)->Call(isolate->GetCurrentContext()->Global(), sizeof(argv)/sizeof(*argv), argv);
-        } else {
-            Local<Function>::New(isolate, work->success_callback)->Call(isolate->GetCurrentContext()->Global(), 0, NULL);
-        }
-        work->success_callback.Reset();
-        work->error_callback.Reset();
-        delete work;
-    }
-
-    void DoCopyFileFromAsync(const FunctionCallbackInfo<Value>& args) {
-        Isolate* isolate = args.GetIsolate();
-        CopyFileFromWork * work = new CopyFileFromWork();
-        work->request.data = work;
-
-        work->file_root = std::string(*v8::String::Utf8Value(args[0]->ToString()));
-        work->file_path = std::string(*v8::String::Utf8Value(args[1]->ToString()));
-        work->ext_path = std::string(*v8::String::Utf8Value(args[2]->ToString()));
-        work->success_callback.Reset(isolate, Local<Function>::Cast(args[3]));
-        work->error_callback.Reset(isolate, Local<Function>::Cast(args[4]));
-
-        uv_queue_work(uv_default_loop(), &work->request, CopyFileFromAsync, CopyFileFromAsyncComplete);
-
-        args.GetReturnValue().Set(Undefined(isolate));
-    }
-
-    struct LinkWork: public FileManagerWork {
-        std::string file_path;
-        std::string other_path;
-        int error;
-    };
-
-    static void LinkAsync(uv_work_t* req) {
-        LinkWork* work = static_cast<LinkWork*>(req->data);
-        try {
-            work->error = 0;
-            link(work->file_root, work->file_path, work->other_path);
-        } catch (OSError& e) {
-            work->error = e.get_err();
-        }
-    }
-
-    static void LinkAsyncComplete(uv_work_t *req, int status) {
-        Isolate* isolate = Isolate::GetCurrent();
-        v8::HandleScope handleScope(isolate);
-        LinkWork *work = static_cast<LinkWork*>(req->data);
-
-        if (work->error) {
-            Local<Value> argv[] = {Integer::New(isolate, work->error)};
-            Local<Function>::New(isolate, work->error_callback)->Call(isolate->GetCurrentContext()->Global(), sizeof(argv)/sizeof(*argv), argv);
-        } else {
-            Local<Function>::New(isolate, work->success_callback)->Call(isolate->GetCurrentContext()->Global(), 0, NULL);
-        }
-        work->success_callback.Reset();
-        work->error_callback.Reset();
-        delete work;
-    }
-
-    void DoLinkAsync(const FunctionCallbackInfo<Value>& args) {
-        Isolate* isolate = args.GetIsolate();
-        LinkWork * work = new LinkWork();
-        work->request.data = work;
-
-        work->file_root = std::string(*v8::String::Utf8Value(args[0]->ToString()));
-        work->file_path = std::string(*v8::String::Utf8Value(args[1]->ToString()));
-        work->other_path = std::string(*v8::String::Utf8Value(args[2]->ToString()));
-        work->success_callback.Reset(isolate, Local<Function>::Cast(args[3]));
-        work->error_callback.Reset(isolate, Local<Function>::Cast(args[4]));
-
-        uv_queue_work(uv_default_loop(), &work->request, LinkAsync, LinkAsyncComplete);
-
-        args.GetReturnValue().Set(Undefined(isolate));
-    }
-
-    struct DeleteFileWork: public FileManagerWork {
-        std::string file_path;
-        int error;
-    };
-
-    static void DeleteFileAsync(uv_work_t* req) {
-        DeleteFileWork* work = static_cast<DeleteFileWork*>(req->data);
-        try {
-            work->error = 0;
-            delete_file(work->file_root, work->file_path);
-        } catch (OSError& e) {
-            work->error = e.get_err();
-        }
-    }
-
-    static void DeleteFileAsyncComplete(uv_work_t *req, int status) {
-        Isolate* isolate = Isolate::GetCurrent();
-        v8::HandleScope handleScope(isolate);
-        DeleteFileWork *work = static_cast<DeleteFileWork*>(req->data);
-
-        if (work->error) {
-            Local<Value> argv[] = {Integer::New(isolate, work->error)};
-            Local<Function>::New(isolate, work->error_callback)->Call(isolate->GetCurrentContext()->Global(), sizeof(argv)/sizeof(*argv), argv);
-        } else {
-            Local<Function>::New(isolate, work->success_callback)->Call(isolate->GetCurrentContext()->Global(), 0, NULL);
-        }
-        work->success_callback.Reset();
-        work->error_callback.Reset();
-        delete work;
-    }
-
-    void DoDeleteFileAsync(const FunctionCallbackInfo<Value>& args) {
-        Isolate* isolate = args.GetIsolate();
-        DeleteFileWork * work = new DeleteFileWork();
-        work->request.data = work;
-
-        work->file_root = std::string(*v8::String::Utf8Value(args[0]->ToString()));
-        work->file_path = std::string(*v8::String::Utf8Value(args[1]->ToString()));
-        work->success_callback.Reset(isolate, Local<Function>::Cast(args[2]));
-        work->error_callback.Reset(isolate, Local<Function>::Cast(args[3]));
-
-        uv_queue_work(uv_default_loop(), &work->request, DeleteFileAsync, DeleteFileAsyncComplete);
-
-        args.GetReturnValue().Set(Undefined(isolate));
-    }
-
-    struct ExistsWork: public FileManagerWork {
-        bool result;
-        std::string file_path;
-        int error;
-    };
-
-    static void ExistsAsync(uv_work_t* req) {
-        ExistsWork* work = static_cast<ExistsWork*>(req->data);
-        try {
-            work->error = 0;
-            work->result = exists(work->file_root, work->file_path);
-        } catch (OSError& e) {
-            work->error = e.get_err();
-        }
-    }
-
-    static void ExistsAsyncComplete(uv_work_t *req, int status) {
-        Isolate* isolate = Isolate::GetCurrent();
-        v8::HandleScope handleScope(isolate);
-        ExistsWork *work = static_cast<ExistsWork*>(req->data);
-
-        if (work->error) {
-            Local<Value> argv[] = {Integer::New(isolate, work->error)};
-            Local<Function>::New(isolate, work->error_callback)->Call(isolate->GetCurrentContext()->Global(), sizeof(argv)/sizeof(*argv), argv);
-        } else {
-            Local<Value> argv[] = {Boolean::New(isolate, work->result)};
-            Local<Function>::New(isolate, work->success_callback)->Call(isolate->GetCurrentContext()->Global(), sizeof(argv)/sizeof(*argv), argv);
-        }
-        work->success_callback.Reset();
-        work->error_callback.Reset();
-        delete work;
-    }
-
-    void DoExistsAsync(const FunctionCallbackInfo<Value>& args) {
-        Isolate* isolate = args.GetIsolate();
-        ExistsWork * work = new ExistsWork();
-        work->request.data = work;
-
-        work->file_root = std::string(*v8::String::Utf8Value(args[0]->ToString()));
-        work->file_path = std::string(*v8::String::Utf8Value(args[1]->ToString()));
-        work->success_callback.Reset(isolate, Local<Function>::Cast(args[2]));
-        work->error_callback.Reset(isolate, Local<Function>::Cast(args[3]));
-
-        uv_queue_work(uv_default_loop(), &work->request, ExistsAsync, ExistsAsyncComplete);
-
-        args.GetReturnValue().Set(Undefined(isolate));
-    }
-
-    void init(Local<Object> exports) {
-        NODE_SET_METHOD(exports, "read_file", DoReadFileAsync);
-        NODE_SET_METHOD(exports, "write_file", DoWriteFileAsync);
-        NODE_SET_METHOD(exports, "copy_file_to_storage", DoCopyFileToAsync);
-        NODE_SET_METHOD(exports, "copy_file_from_storage", DoCopyFileFromAsync);
-        NODE_SET_METHOD(exports, "link_file", DoLinkAsync);
-        NODE_SET_METHOD(exports, "delete_file", DoDeleteFileAsync);
-        NODE_SET_METHOD(exports, "file_exists", DoExistsAsync);
-    }
-    NODE_MODULE(file_store_internal, init)
+NAN_METHOD(ReadFile) {
+    Nan::Utf8String js_file_root(info[0]);
+    std::string file_root(*js_file_root, js_file_root.length());
+    Nan::Utf8String js_path(info[1]);
+    std::string path(*js_path, js_path.length());
+    Nan::Callback *callback = new Nan::Callback(info[2].As<v8::Function>());
+    Nan::AsyncQueueWorker(new ReadFileWorker(callback, file_root, path));
 }
+
+// void write_file(const std::string& file_root, const std::string& path, const std::vector<unsigned char>& data);
+class WriteFileWorker: public Nan::AsyncWorker {
+    std::string file_root;
+    std::string path;
+    std::vector<unsigned char> data;
+    int error;
+public:
+    WriteFileWorker(Nan::Callback* callback, const std::string& file_root, const std::string& path, const std::string& data)
+        : AsyncWorker(callback), file_root(file_root), path(path), data(data.begin(), data.end()), error(0) {}
+    void Execute() {
+        try {
+            write_file(file_root, path, data);
+        } catch (OSError& e) {
+            error = e.get_err();
+        }
+    }
+    void HandleOKCallback () {
+        Nan::HandleScope scope;
+        v8::Local<v8::Value> error_code = Nan::New<v8::Integer>(error);
+        v8::Local<v8::Value> argv[] = {error_code};
+        callback->Call(1, argv);
+    }
+};
+
+NAN_METHOD(WriteFile) {
+    Nan::Utf8String js_file_root(info[0]);
+    std::string file_root(*js_file_root, js_file_root.length());
+    Nan::Utf8String js_path(info[1]);
+    std::string path(*js_path, js_path.length());
+    Nan::Utf8String js_data(info[2]);
+    std::string data(*js_data, js_data.length());
+    Nan::Callback *callback = new Nan::Callback(info[3].As<v8::Function>());
+    Nan::AsyncQueueWorker(new WriteFileWorker(callback, file_root, path, data));
+}
+
+// void copy_file_to_storage(const std::string& file_root, const std::string& path, const std::string& orig_file);
+class CopyFileToWorker: public Nan::AsyncWorker {
+    std::string file_root;
+    std::string path;
+    std::string orig_path;
+    int error;
+public:
+    CopyFileToWorker(Nan::Callback* callback, const std::string& file_root, const std::string& path, const std::string& orig_path)
+        : AsyncWorker(callback), file_root(file_root), path(path), orig_path(orig_path), error(0) {}
+    void Execute() {
+        try {
+            copy_file_to_storage(file_root, path, orig_path);
+        } catch (OSError& e) {
+            error = e.get_err();
+        }
+    }
+    void HandleOKCallback () {
+        Nan::HandleScope scope;
+        v8::Local<v8::Value> error_code = Nan::New<v8::Integer>(error);
+        v8::Local<v8::Value> argv[] = {error_code};
+        callback->Call(1, argv);
+    }
+};
+
+NAN_METHOD(CopyFileTo) {
+    Nan::Utf8String js_file_root(info[0]);
+    std::string file_root(*js_file_root, js_file_root.length());
+    Nan::Utf8String js_path(info[1]);
+    std::string path(*js_path, js_path.length());
+    Nan::Utf8String js_orig_path(info[2]);
+    std::string orig_path(*js_orig_path, js_orig_path.length());
+    Nan::Callback *callback = new Nan::Callback(info[3].As<v8::Function>());
+    Nan::AsyncQueueWorker(new CopyFileToWorker(callback, file_root, path, orig_path));
+}
+
+// void copy_file_from_storage(const std::string& file_root, const std::string& path, const std::string& dest_file);
+class CopyFileFromWorker: public Nan::AsyncWorker {
+    std::string file_root;
+    std::string path;
+    std::string dest_path;
+    int error;
+public:
+    CopyFileFromWorker(Nan::Callback* callback, const std::string& file_root, const std::string& path, const std::string& dest_path)
+        : AsyncWorker(callback), file_root(file_root), path(path), dest_path(dest_path), error(0) {}
+    void Execute() {
+        try {
+            copy_file_from_storage(file_root, path, dest_path);
+        } catch (OSError& e) {
+            error = e.get_err();
+        }
+    }
+    void HandleOKCallback () {
+        Nan::HandleScope scope;
+        v8::Local<v8::Value> error_code = Nan::New<v8::Integer>(error);
+        v8::Local<v8::Value> argv[] = {error_code};
+        callback->Call(1, argv);
+    }
+};
+
+NAN_METHOD(CopyFileFrom) {
+    Nan::Utf8String js_file_root(info[0]);
+    std::string file_root(*js_file_root, js_file_root.length());
+    Nan::Utf8String js_path(info[1]);
+    std::string path(*js_path, js_path.length());
+    Nan::Utf8String js_dest_path(info[2]);
+    std::string dest_path(*js_dest_path, js_dest_path.length());
+    Nan::Callback *callback = new Nan::Callback(info[3].As<v8::Function>());
+    Nan::AsyncQueueWorker(new CopyFileFromWorker(callback, file_root, path, dest_path));
+}
+
+// void delete_file(const std::string& file_root, const std::string& path);
+class DeleteFileWorker: public Nan::AsyncWorker {
+    std::string file_root;
+    std::string path;
+    int error;
+public:
+    DeleteFileWorker(Nan::Callback* callback, const std::string& file_root, const std::string& path)
+        : AsyncWorker(callback), file_root(file_root), path(path), error(0) {}
+    void Execute() {
+        try {
+            delete_file(file_root, path);
+        } catch (OSError& e) {
+            error = e.get_err();
+        }
+    }
+    void HandleOKCallback () {
+        Nan::HandleScope scope;
+        v8::Local<v8::Value> error_code = Nan::New<v8::Integer>(error);
+        v8::Local<v8::Value> argv[] = {error_code};
+        callback->Call(1, argv);
+    }
+};
+
+NAN_METHOD(DeleteFile) {
+    Nan::Utf8String js_file_root(info[0]);
+    std::string file_root(*js_file_root, js_file_root.length());
+    Nan::Utf8String js_path(info[1]);
+    std::string path(*js_path, js_path.length());
+    Nan::Callback *callback = new Nan::Callback(info[2].As<v8::Function>());
+    Nan::AsyncQueueWorker(new DeleteFileWorker(callback, file_root, path));
+}
+
+// bool exists(const std::string& file_root, const std::string& path);
+class FileExistsWorker: public Nan::AsyncWorker {
+    bool result;
+    std::string file_root;
+    std::string path;
+    int error;
+public:
+    FileExistsWorker(Nan::Callback* callback, const std::string& file_root, const std::string& path)
+        : AsyncWorker(callback), file_root(file_root), path(path), error(0) {}
+    void Execute() {
+        try {
+            result = exists(file_root, path);
+        } catch (OSError& e) {
+            error = e.get_err();
+        }
+    }
+    void HandleOKCallback () {
+        Nan::HandleScope scope;
+        v8::Local<v8::Value> error_code = Nan::New<v8::Integer>(error);
+        if (error) {
+            v8::Local<v8::Value> argv[] = {error_code};
+            callback->Call(1, argv);
+        } else {
+            v8::Local<v8::Value> return_value = Nan::New<v8::Boolean>(result);
+            v8::Local<v8::Value> argv[] = {error_code, return_value};
+            callback->Call(2, argv);
+       }
+    }
+};
+
+NAN_METHOD(FileExists) {
+    Nan::Utf8String js_file_root(info[0]);
+    std::string file_root(*js_file_root, js_file_root.length());
+    Nan::Utf8String js_path(info[1]);
+    std::string path(*js_path, js_path.length());
+    Nan::Callback *callback = new Nan::Callback(info[2].As<v8::Function>());
+    Nan::AsyncQueueWorker(new FileExistsWorker(callback, file_root, path));
+}
+
+// void link(const std::string& file_root, const std::string& orig_path, const std::string& dest_path);
+class LinkFileWorker: public Nan::AsyncWorker {
+    std::string file_root;
+    std::string orig_path;
+    std::string dest_path;
+    int error;
+public:
+    LinkFileWorker(Nan::Callback* callback, const std::string& file_root, const std::string& orig_path, const std::string& dest_path)
+        : AsyncWorker(callback), file_root(file_root), orig_path(orig_path), dest_path(dest_path), error(0) {}
+    void Execute() {
+        try {
+            link(file_root, orig_path, dest_path);
+        } catch (OSError& e) {
+            error = e.get_err();
+        }
+    }
+    void HandleOKCallback () {
+        Nan::HandleScope scope;
+        v8::Local<v8::Value> error_code = Nan::New<v8::Integer>(error);
+        v8::Local<v8::Value> argv[] = {error_code};
+        callback->Call(1, argv);
+    }
+};
+
+NAN_METHOD(LinkFile) {
+    Nan::Utf8String js_file_root(info[0]);
+    std::string file_root(*js_file_root, js_file_root.length());
+    Nan::Utf8String js_orig_path(info[1]);
+    std::string orig_path(*js_orig_path, js_orig_path.length());
+    Nan::Utf8String js_dest_path(info[2]);
+    std::string dest_path(*js_dest_path, js_dest_path.length());
+    Nan::Callback *callback = new Nan::Callback(info[3].As<v8::Function>());
+    Nan::AsyncQueueWorker(new LinkFileWorker(callback, file_root, orig_path, dest_path));
+}
+
+NAN_MODULE_INIT(Init) {
+    Nan::Set(target, Nan::New<v8::String>("read_file").ToLocalChecked(),
+        Nan::GetFunction(Nan::New<v8::FunctionTemplate>(ReadFile)).ToLocalChecked());
+    Nan::Set(target, Nan::New<v8::String>("write_file").ToLocalChecked(),
+        Nan::GetFunction(Nan::New<v8::FunctionTemplate>(WriteFile)).ToLocalChecked());
+    Nan::Set(target, Nan::New<v8::String>("copy_file_to_storage").ToLocalChecked(),
+        Nan::GetFunction(Nan::New<v8::FunctionTemplate>(CopyFileTo)).ToLocalChecked());
+    Nan::Set(target, Nan::New<v8::String>("copy_file_from_storage").ToLocalChecked(),
+        Nan::GetFunction(Nan::New<v8::FunctionTemplate>(CopyFileFrom)).ToLocalChecked());
+    Nan::Set(target, Nan::New<v8::String>("delete_file").ToLocalChecked(),
+        Nan::GetFunction(Nan::New<v8::FunctionTemplate>(DeleteFile)).ToLocalChecked());
+    Nan::Set(target, Nan::New<v8::String>("file_exists").ToLocalChecked(),
+        Nan::GetFunction(Nan::New<v8::FunctionTemplate>(FileExists)).ToLocalChecked());
+    Nan::Set(target, Nan::New<v8::String>("link_file").ToLocalChecked(),
+        Nan::GetFunction(Nan::New<v8::FunctionTemplate>(LinkFile)).ToLocalChecked());
+}
+
+NODE_MODULE(file_store_internal, Init)
