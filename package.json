@@ -1,6 +1,6 @@
 {
   "name": "shuriken-fs",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A library to facilitate safe access to files on a shared file system",
   "main": "file-store.js",
   "scripts": {
