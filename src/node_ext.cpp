@@ -17,11 +17,12 @@ namespace file_store_internal {
     using v8::Boolean;
     using v8::Value;
     using v8::Persistent;
+    using v8::InvocationCallback;
 
     struct FileManagerWork {
         uv_work_t  request;
-        Persistent<Function> success_callback;
-        Persistent<Function> error_callback;
+        Persistent<InvocationCallback> success_callback;
+        Persistent<InvocationCallback> error_callback;
         std::string file_root;
     };
 
