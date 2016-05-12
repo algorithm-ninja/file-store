@@ -1,8 +1,8 @@
 {
   "name": "shuriken-fs",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A library to facilitate safe access to files on a shared file system",
-  "main": "file-store.js",
+  "main": "nodejs/file-store.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "install": "node-gyp rebuild"
