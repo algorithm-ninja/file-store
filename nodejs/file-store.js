@@ -1,6 +1,7 @@
 'use strict';
 
 var fs_internal = require('../build/Release/file_store_internal');
+var should = require('should/as-function');
 
 function getReturnCallback(callback) {
   return function(err, ret) {
@@ -93,6 +94,42 @@ function FileHandle(fileRoot, filePath) {
         getVoidCallback(callback));
     return self;
   };
+
+  /**
+   * Stream-like .on() interface
+   */
+  this.on = function(event, callback) {
+    // event === 'data'
+    this.read(callback);
+  }
+
+  /**
+   * Stream-like .pipe() interface
+   */
+  this.pipe = function(writable) {
+    this.read(function(data) {
+      // hack: http://stackoverflow.com/a/22085851/747654
+      var s = new stream.Readable();
+      s._read = function noop() {}; // redundant? see update below
+      s.push(data);
+      s.push(null);
+
+      // actual pipe
+      s.pipe(writable);
+    });
+  };
 }
 
-module.exports = FileHandle;
+function FileDB(fileRoot) {
+    var self = this;
+
+    self.fileRoot = fileRoot;
+
+    self.get = function(relativePath) {
+        should(relativePath).startWith('shuriken://');
+        relativePath = relativePath.replace('shuriken://', '');
+        return new FileHandle(self.fileRoot, relativePath);
+    };
+}
+
+module.exports = FileDB;
