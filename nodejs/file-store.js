@@ -86,6 +86,10 @@ function FileHandle(fileRoot, filePath) {
     return self;
   };
 
+  this.createLinkSync = function(destination) {
+    deasync(this.createLink.bind(this))(destination);
+  };
+
   // callback(error)
   this.remove = function(callback) {
     var self = this;
@@ -96,6 +100,10 @@ function FileHandle(fileRoot, filePath) {
         self.filePath,
         getVoidCallback(callback));
     return self;
+  };
+
+  this.removeSync = function() {
+    deasync(this.remove.bind(this))();
   };
 
   // callback(error)
@@ -111,6 +119,10 @@ function FileHandle(fileRoot, filePath) {
     return self;
   };
 
+  this.copyToSync = function(destPath) {
+    deasync(this.copyTo.bind(this))(destPath);
+  };
+
   // callback(error)
   this.copyFrom = function(origPath, callback) {
     var self = this;
@@ -122,6 +134,10 @@ function FileHandle(fileRoot, filePath) {
         origPath,
         getVoidCallback(callback));
     return self;
+  };
+
+  this.copyFromSync = function(origPath) {
+    deasync(this.copyFrom.bind(this))(origPath);
   };
 }
 
