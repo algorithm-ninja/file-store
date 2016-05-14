@@ -1,7 +1,8 @@
 'use strict';
 
-var fs_internal = require('../build/Release/file_store_internal');
+var fsInternal = require('../build/Release/file_store_internal');
 var should = require('should/as-function');
+var async = require('async');
 
 function getReturnCallback(callback) {
   return function(err, ret) {
@@ -24,7 +25,7 @@ function FileHandle(fileRoot, filePath) {
   // callback(error, exists)
   this.exists = function(callback) {
     /* jshint camelcase: false */
-    fs_internal.file_exists(
+    fsInternal.file_exists(
         self.fileRoot,
         self.filePath,
         getReturnCallback(callback));
@@ -34,17 +35,33 @@ function FileHandle(fileRoot, filePath) {
   // callback(error, data)
   this.read = function(callback) {
     /* jshint camelcase: false */
-    fs_internal.read_file(
+    fsInternal.read_file(
         self.fileRoot,
         self.filePath,
         getReturnCallback(callback));
     return self;
   };
 
+  this.readSync = function() {
+    var self = this;
+    var status = {};
+
+    async.series([
+      function() {
+        self.read(function(error, data) {
+          status.error = error;
+          status.data = data;
+        });
+      }
+    ]);
+
+    return status;
+  };
+
   // callback(error)
   this.write = function(data, callback) {
     /* jshint camelcase: false */
-    fs_internal.write_file(
+    fsInternal.write_file(
         self.fileRoot,
         self.filePath,
         data,
@@ -52,10 +69,25 @@ function FileHandle(fileRoot, filePath) {
     return self;
   };
 
+  this.writeSync = function() {
+    var self = this;
+    var status = {};
+
+    async.series([
+      function() {
+        self.write(function(error) {
+          status.error = error;
+        });
+      }
+    ]);
+
+    return status;
+  };
+
   // callback(error)
   this.createLink = function(destination, callback) {
     /* jshint camelcase: false */
-    fs_internal.link_file(
+    fsInternal.link_file(
         self.fileRoot,
         self.filePath,
         destination,
@@ -66,7 +98,7 @@ function FileHandle(fileRoot, filePath) {
   // callback(error)
   this.remove = function(callback) {
     /* jshint camelcase: false */
-    fs_internal.delete_file(
+    fsInternal.delete_file(
         self.fileRoot,
         self.filePath,
         getVoidCallback(callback));
@@ -76,7 +108,7 @@ function FileHandle(fileRoot, filePath) {
   // callback(error)
   this.copyTo = function(destPath, callback) {
     /* jshint camelcase: false */
-    fs_internal.copy_file_from_storage(
+    fsInternal.copy_file_from_storage(
         self.fileRoot,
         self.filePath,
         destPath,
@@ -87,36 +119,12 @@ function FileHandle(fileRoot, filePath) {
   // callback(error)
   this.copyFrom = function(origPath, callback) {
     /* jshint camelcase: false */
-    fs_internal.copy_file_to_storage(
+    fsInternal.copy_file_to_storage(
         self.fileRoot,
         self.filePath,
         origPath,
         getVoidCallback(callback));
     return self;
-  };
-
-  /**
-   * Stream-like .on() interface
-   */
-  this.on = function(event, callback) {
-    // event === 'data'
-    this.read(callback);
-  }
-
-  /**
-   * Stream-like .pipe() interface
-   */
-  this.pipe = function(writable) {
-    this.read(function(data) {
-      // hack: http://stackoverflow.com/a/22085851/747654
-      var s = new stream.Readable();
-      s._read = function noop() {}; // redundant? see update below
-      s.push(data);
-      s.push(null);
-
-      // actual pipe
-      s.pipe(writable);
-    });
   };
 }
 
