@@ -2,7 +2,7 @@
 
 var fsInternal = require('../build/Release/file_store_internal');
 var should = require('should/as-function');
-var async = require('async');
+var deasync = require('deasync');
 
 function getReturnCallback(callback) {
   return function(err, ret) {
@@ -24,6 +24,8 @@ function FileHandle(fileRoot, filePath) {
 
   // callback(error, exists)
   this.exists = function(callback) {
+    var self = this;
+
     /* jshint camelcase: false */
     fsInternal.file_exists(
         self.fileRoot,
@@ -32,8 +34,15 @@ function FileHandle(fileRoot, filePath) {
     return self;
   };
 
+  this.existsSync = function() {
+    var outcome = deasync(this.exists.bind(this))();
+    return outcome;
+  };
+
   // callback(error, data)
   this.read = function(callback) {
+    var self = this;
+
     /* jshint camelcase: false */
     fsInternal.read_file(
         self.fileRoot,
@@ -43,23 +52,14 @@ function FileHandle(fileRoot, filePath) {
   };
 
   this.readSync = function() {
-    var self = this;
-    var status = {};
-
-    async.series([
-      function() {
-        self.read(function(error, data) {
-          status.error = error;
-          status.data = data;
-        });
-      }
-    ]);
-
-    return status;
+    var data = deasync(this.read.bind(this))();
+    return data;
   };
 
   // callback(error)
   this.write = function(data, callback) {
+    var self = this;
+
     /* jshint camelcase: false */
     fsInternal.write_file(
         self.fileRoot,
@@ -69,23 +69,14 @@ function FileHandle(fileRoot, filePath) {
     return self;
   };
 
-  this.writeSync = function() {
-    var self = this;
-    var status = {};
-
-    async.series([
-      function() {
-        self.write(function(error) {
-          status.error = error;
-        });
-      }
-    ]);
-
-    return status;
+  this.writeSync = function(data) {
+    deasync(this.write.bind(this))(data);
   };
 
   // callback(error)
   this.createLink = function(destination, callback) {
+    var self = this;
+
     /* jshint camelcase: false */
     fsInternal.link_file(
         self.fileRoot,
@@ -97,6 +88,8 @@ function FileHandle(fileRoot, filePath) {
 
   // callback(error)
   this.remove = function(callback) {
+    var self = this;
+
     /* jshint camelcase: false */
     fsInternal.delete_file(
         self.fileRoot,
@@ -107,6 +100,8 @@ function FileHandle(fileRoot, filePath) {
 
   // callback(error)
   this.copyTo = function(destPath, callback) {
+    var self = this;
+
     /* jshint camelcase: false */
     fsInternal.copy_file_from_storage(
         self.fileRoot,
@@ -118,6 +113,8 @@ function FileHandle(fileRoot, filePath) {
 
   // callback(error)
   this.copyFrom = function(origPath, callback) {
+    var self = this;
+
     /* jshint camelcase: false */
     fsInternal.copy_file_to_storage(
         self.fileRoot,
@@ -129,14 +126,12 @@ function FileHandle(fileRoot, filePath) {
 }
 
 function FileDB(fileRoot) {
-    var self = this;
+    this.fileRoot = fileRoot;
 
-    self.fileRoot = fileRoot;
-
-    self.get = function(relativePath) {
+    this.get = function(relativePath) {
         should(relativePath).startWith('shuriken://');
         relativePath = relativePath.replace('shuriken://', '');
-        return new FileHandle(self.fileRoot, relativePath);
+        return new FileHandle(this.fileRoot, relativePath);
     };
 }
 
