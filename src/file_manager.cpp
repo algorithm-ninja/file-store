@@ -45,7 +45,7 @@ static void file_reader(const std::string& file_path, const read_callback_t& cal
         size_read = read(fd, buf, buf_size);
         if (size_read == -1 && errno == EINTR) continue;
         if (size_read == -1) throw OSError("read", errno);
-        callback(buf, buf_size);
+        callback(buf, size_read);
     } while (size_read > 0);
 }
 
