@@ -90,7 +90,7 @@ std::vector<unsigned char> read_file(const std::string& file_root, const std::st
     file_reader(file_root + "/files/" + path, [&](const unsigned char* buf, size_t len) {
         vec.insert(vec.end(), buf, buf+len);
     });
-    return std::move(vec);
+    return vec;
 }
 
 void write_file(const std::string& file_root, const std::string& path, const std::vector<unsigned char>& data) {

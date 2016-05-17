@@ -1,6 +1,6 @@
 OBJECTS=build/shuriken-cp.o build/file_manager.o
 CXX?=g++
-CXXFLAGS=-O2 -Wall -std=c++11 -Iheaders -ggdb
+CXXFLAGS=-O2 -Wall -std=c++11 -Iheaders -ggdb -I/opt/local/include
 
 LDFLAGS=-lcrypto
 
